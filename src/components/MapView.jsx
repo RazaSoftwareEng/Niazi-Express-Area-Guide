@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet'
+import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
-import { CATEGORIES, OFFICE, ORANGE_LINE } from '../data/places'
+import { CATEGORIES, OFFICE } from '../data/places'
+import { ORANGE_LINE_TRACK } from '../data/orangeLineTrack'
 import { distanceKm, fmtKm } from '../lib/geo'
 import { officeIcon, placeIcon } from '../lib/icons'
 import { layoutLabels } from '../lib/labels'
@@ -21,12 +22,10 @@ function initialView(radiusKm) {
 /** Radius badle to map us radius par fit ho (pehli dafa skip, taake URL wala view rahe) */
 function FitRadius({ radiusKm }) {
   const map = useMap()
-  const first = useRef(true)
+  const prev = useRef(radiusKm) // sirf tab fit karo jab radius waqai badle
   useEffect(() => {
-    if (first.current) {
-      first.current = false
-      return
-    }
+    if (prev.current === radiusKm) return
+    prev.current = radiusKm
     map.fitBounds(radiusBounds(radiusKm), { animate: true })
   }, [radiusKm, map])
   return null
@@ -132,7 +131,7 @@ export default function MapView({ places, selected, onSelect, pickMode, onPick, 
   const [zoom, setZoom] = useState(14)
   const markerRefs = useRef({})
 
-  const orangePath = useMemo(() => ORANGE_LINE.map((s) => [s.lat, s.lng]), [])
+  const orangePath = ORANGE_LINE_TRACK
   const rings = ringsFor(radiusKm)
   // Radius se bahar ka area halka grey: bara rectangle jis mein circle ka "hole" hai
   const mask = useMemo(() => {
@@ -205,6 +204,12 @@ export default function MapView({ places, selected, onSelect, pickMode, onPick, 
           zIndexOffset={p.highlight ? 500 : p.tier === 1 ? 100 : 0}
           eventHandlers={{ click: () => onSelect(p) }}
         >
+          {/* Plazas ka label nahi hota — cursor le jane par naam dikhao */}
+          {p.noLabel && (
+            <Tooltip direction="top" offset={[0, -14]}>
+              {p.name}
+            </Tooltip>
+          )}
           <Popup>
             <PlacePopup place={p} />
           </Popup>

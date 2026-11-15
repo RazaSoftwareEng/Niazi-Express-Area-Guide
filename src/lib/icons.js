@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { ICONS } from './iconMap'
 import { CATEGORIES } from '../data/places'
+import { pinSize } from './labels'
 
 const svgCache = {}
 function svg(name, size) {
@@ -22,7 +23,7 @@ const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>'
  */
 export function placeIcon(place, { label, selected }) {
   const cat = CATEGORIES[place.cat]
-  const size = place.tier === 1 ? 30 : 26
+  const size = pinSize(place)
   const c = size / 2
   const line = label?.line
     ? `<svg class="nx-leader" width="1" height="1"><line x1="${c}" y1="${c}" x2="${c + label.line.x}" y2="${c + label.line.y}" /></svg>`

@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import { X } from 'lucide-react'
-import { OFFICE, ORANGE_LINE, PLACES } from '../data/places'
+import { OFFICE, PLACES } from '../data/places'
+import { ORANGE_LINE_TRACK } from '../data/orangeLineTrack'
 import { officeIcon, placeIcon } from '../lib/icons'
 import { layoutLabels } from '../lib/labels'
 import { TILE_ATTR, TILE_URL } from './MapView'
 
-const CORE = PLACES.filter((p) => (p.tier === 2 && p.cat !== 'metro') || ['niazi-adda', 'yateem-chowk'].includes(p.id))
+const CORE = PLACES.filter((p) => (p.tier >= 2 && p.cat !== 'metro') || ['niazi-adda', 'yateem-chowk'].includes(p.id))
 const bounds = L.latLngBounds([...CORE, OFFICE].map((p) => [p.lat, p.lng])).pad(0.15)
 // Jo Orange Line stations is box ke andar aate hain, woh bhi dikhao
 const LOCAL = [...CORE, ...PLACES.filter((p) => p.cat === 'metro' && bounds.contains([p.lat, p.lng]))]
@@ -58,7 +59,7 @@ export default function InsetMap({ onOpen, onClose }) {
         >
           <ViewReader onView={setView} />
           <TileLayer url={TILE_URL} attribution={TILE_ATTR} className="nx-tiles" />
-          <Polyline positions={ORANGE_LINE.map((s) => [s.lat, s.lng])} pathOptions={{ color: '#f58220', weight: 5 }} />
+          <Polyline positions={ORANGE_LINE_TRACK} pathOptions={{ color: '#f58220', weight: 5 }} />
           {LOCAL.map((p) => (
             <Marker key={p.id} position={[p.lat, p.lng]} icon={placeIcon(p, { label: shown.get(p.id) })} interactive={false} />
           ))}

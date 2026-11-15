@@ -61,6 +61,7 @@ export function layoutLabels(places, zoom, { selectedId, office, viewport } = {}
 
   const result = new Map()
   for (const p of order) {
+    if (p.noLabel) continue // plazas: sirf icon, label nahi
     const { x, y } = pts.get(p.id)
     const h = pinSize(p) / 2
     const w = labelWidth(p.name)

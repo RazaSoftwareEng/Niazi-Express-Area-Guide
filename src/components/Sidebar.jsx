@@ -10,6 +10,7 @@ export default function Sidebar({ activeCats, toggleCat, query, setQuery, places
   const counts = Object.fromEntries(Object.keys(CATEGORIES).map((c) => [c, PLACES.filter((p) => p.cat === c).length]))
 
   const list = places
+    .filter((p) => !p.noLabel) // plazas list mein nahi (sirf map par)
     .map((p) => ({ ...p, km: distanceKm(OFFICE, p) }))
     .sort((a, b) => a.km - b.km)
 
