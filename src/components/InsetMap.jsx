@@ -58,7 +58,7 @@ export default function InsetMap({ onOpen, onClose }) {
           className="h-full w-full"
         >
           <ViewReader onView={setView} />
-          <TileLayer url={TILE_URL} attribution={TILE_ATTR} className="nx-tiles" />
+          <TileLayer url={TILE_URL} attribution={TILE_ATTR} className="nx-tiles" crossOrigin="anonymous" />
           <Polyline positions={ORANGE_LINE_TRACK} pathOptions={{ color: '#f58220', weight: 5 }} />
           {LOCAL.map((p) => (
             <Marker key={p.id} position={[p.lat, p.lng]} icon={placeIcon(p, { label: shown.get(p.id) })} interactive={false} />

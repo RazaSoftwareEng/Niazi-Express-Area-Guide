@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, ScaleControl, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { CATEGORIES, OFFICE } from '../data/places'
 import { ORANGE_LINE_TRACK } from '../data/orangeLineTrack'
@@ -7,6 +7,7 @@ import { distanceKm, fmtKm } from '../lib/geo'
 import { officeIcon, placeIcon } from '../lib/icons'
 import { layoutLabels } from '../lib/labels'
 import { circlePoints, radiusBounds, ringsFor, ringTop } from '../lib/radius'
+import { detailBounds } from '../lib/detail'
 
 // Free OpenStreetMap tiles (demo ke liye). Production / zyada traffic ke liye
 // MapTiler ya Stadia ki free API key wale tiles lagayein.
@@ -35,10 +36,11 @@ const nextFrame = () => new Promise((r) => requestAnimationFrame(() => requestAn
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
 /**
- * Print ka process: layout paper size par set hone do → map radius par fit →
- * tiles load hone ka intezar → browser print → wapas screen view.
+ * Print ka process: layout paper size par set hone do → map radius (ya screen wale
+ * view) par fit → tiles load hone ka intezar → browser print → wapas screen view.
+ * printing.preview = true ho to sirf layout dikhao, print window na kholo.
  */
-function PrintRunner({ printing, radiusKm, onDone }) {
+function PrintRunner({ printing, radiusKm, onReady }) {
   const map = useMap()
   useEffect(() => {
     if (!printing) return
@@ -46,23 +48,31 @@ function PrintRunner({ printing, radiusKm, onDone }) {
     ;(async () => {
       await nextFrame()
       map.invalidateSize()
-      map.fitBounds(radiusBounds(radiusKm), { animate: false, padding: [6, 6] })
+      const target =
+        printing.step === 'detail'
+          ? detailBounds()
+          : printing.bounds
+            ? L.latLngBounds(printing.bounds)
+            : radiusBounds(radiusKm)
+      map.fitBounds(target, { animate: false, padding: [6, 6] })
       let tiles
       map.eachLayer((l) => l instanceof L.TileLayer && (tiles = l))
       await wait(400)
       for (let t = 0; t < 40 && tiles?.isLoading?.(); t++) await wait(200) // max ~8s
       await wait(300)
-      if (cancelled) return
-      window.print()
-      onDone()
+      if (cancelled || printing.preview) return
+      if (document.fonts?.ready) await document.fonts.ready
+      const more = await onReady() // App yahan high-res tasveer banati hai
+      if (more) return // agla page (close-up) abhi banega
       await nextFrame()
       map.invalidateSize()
-      map.fitBounds(radiusBounds(radiusKm), { animate: false })
+      // Screen ko pehle wale view par wapas lao
+      map.fitBounds(printing.bounds ? L.latLngBounds(printing.bounds) : radiusBounds(radiusKm), { animate: false })
     })()
     return () => {
       cancelled = true
     }
-  }, [printing, radiusKm, map, onDone])
+  }, [printing, radiusKm, map, onReady])
   return null
 }
 
@@ -127,7 +137,7 @@ export function PlacePopup({ place }) {
   )
 }
 
-export default function MapView({ places, selected, onSelect, pickMode, onPick, picked, radiusKm, printing, onPrintDone }) {
+export default function MapView({ mapRef, places, selected, onSelect, pickMode, onPick, picked, radiusKm, printing, onPrintReady }) {
   const [zoom, setZoom] = useState(14)
   const markerRefs = useRef({})
 
@@ -143,13 +153,21 @@ export default function MapView({ places, selected, onSelect, pickMode, onPick, 
     return [outer, circlePoints(radiusKm)]
   }, [radiusKm])
 
+  // Plazas (tier 3) zoom 14 se kam par nahi — door se sirf dhabba bante hain aur labels dhak dete hain
+  const detailPage = printing?.step === 'detail'
+  const visible = useMemo(
+    () => places.filter((p) => p.tier !== 3 || zoom >= 14 || detailPage),
+    [places, zoom, detailPage],
+  )
+
   const shown = useMemo(
-    () => layoutLabels(places, zoom, { selectedId: selected?.id, office: OFFICE }),
-    [places, zoom, selected],
+    () => layoutLabels(visible, zoom, { selectedId: selected?.id, office: OFFICE, labelAll: detailPage }),
+    [visible, zoom, selected, detailPage],
   )
 
   return (
     <MapContainer
+      ref={mapRef}
       {...initialView(radiusKm)}
       zoomSnap={0.25}
       zoomDelta={0.5}
@@ -157,45 +175,53 @@ export default function MapView({ places, selected, onSelect, pickMode, onPick, 
       maxZoom={18}
       className={`h-full w-full ${pickMode ? 'cursor-crosshair' : ''}`}
     >
-      <TileLayer url={TILE_URL} attribution={TILE_ATTR} maxZoom={19} className="nx-tiles" />
+      {/* crossOrigin: download ke waqt tiles ko image mein capture karne ke liye zaroori */}
+      <TileLayer url={TILE_URL} attribution={TILE_ATTR} maxZoom={19} className="nx-tiles" crossOrigin="anonymous" />
       <MapEvents onZoom={setZoom} pickMode={pickMode} onPick={onPick} />
       <FlyToSelected place={selected} markerRefs={markerRefs} />
       <AutoResize />
       <FitRadius radiusKm={radiusKm} />
-      <PrintRunner printing={printing} radiusKm={radiusKm} onDone={onPrintDone} />
+      <PrintRunner printing={printing} radiusKm={radiusKm} onReady={onPrintReady} />
 
-      {/* Radius se bahar wala area */}
-      <Polygon positions={mask} pathOptions={{ stroke: false, fillColor: '#334155', fillOpacity: 0.28, interactive: false }} />
-      <Circle
-        center={[OFFICE.lat, OFFICE.lng]}
-        radius={radiusKm * 1000}
-        pathOptions={{ color: '#1e1b8f', weight: 2.5, opacity: 0.9, fill: false, interactive: false }}
-      />
+      {/* Print / PDF mein: scale bar (km); radius circle, grey area aur rings nahi */}
+      {printing && <ScaleControl position="bottomleft" imperial={false} maxWidth={220} />}
 
-      {/* Distance rings */}
-      {rings.slice(0, -1).map((km) => (
-        <Circle
-          key={km}
-          center={[OFFICE.lat, OFFICE.lng]}
-          radius={km * 1000}
-          pathOptions={{ color: '#0f172a', weight: 1.2, opacity: 0.45, dashArray: '6 6', fill: false, interactive: false }}
-        />
-      ))}
-      {rings.map((km) => (
-        <Marker
-          key={`ring-${km}`}
-          position={ringTop(km)}
-          icon={L.divIcon({ html: `<div class="nx-ring-label">${km} km</div>`, className: 'nx-icon', iconSize: [0, 0] })}
-          interactive={false}
-        />
-      ))}
+      {!printing && (
+        <>
+          {/* Radius se bahar wala area */}
+          <Polygon positions={mask} pathOptions={{ stroke: false, fillColor: '#334155', fillOpacity: 0.28, interactive: false }} />
+          <Circle
+            center={[OFFICE.lat, OFFICE.lng]}
+            radius={radiusKm * 1000}
+            pathOptions={{ color: '#1e1b8f', weight: 2.5, opacity: 0.9, fill: false, interactive: false }}
+          />
+
+          {/* Distance rings */}
+          {rings.slice(0, -1).map((km) => (
+            <Circle
+              key={km}
+              center={[OFFICE.lat, OFFICE.lng]}
+              radius={km * 1000}
+              pathOptions={{ color: '#0f172a', weight: 1.2, opacity: 0.45, dashArray: '6 6', fill: false, interactive: false }}
+            />
+          ))}
+          {rings.map((km) => (
+            <Marker
+              key={`ring-${km}`}
+              position={ringTop(km)}
+              icon={L.divIcon({ html: `<div class="nx-ring-label">${km} km</div>`, className: 'nx-icon', iconSize: [0, 0] })}
+              interactive={false}
+            />
+          ))}
+        </>
+      )}
 
       {/* Orange Line */}
       <Polyline positions={orangePath} pathOptions={{ color: '#ffffff', weight: 9, opacity: 0.9 }} />
       <Polyline positions={orangePath} pathOptions={{ color: '#f58220', weight: 5 }} />
 
       {/* Places */}
-      {places.map((p) => (
+      {visible.map((p) => (
         <Marker
           key={p.id}
           ref={(r) => (markerRefs.current[p.id] = r)}
@@ -224,7 +250,7 @@ export default function MapView({ places, selected, onSelect, pickMode, onPick, 
         </Popup>
       </Marker>
 
-      {picked && (
+      {picked && !printing && (
         <Marker position={picked} icon={L.divIcon({ html: '<div class="nx-pick"></div>', className: 'nx-icon', iconSize: [16, 16], iconAnchor: [8, 8] })} />
       )}
     </MapContainer>

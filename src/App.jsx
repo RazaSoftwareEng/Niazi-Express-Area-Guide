@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Crosshair, PanelLeftClose, PanelLeftOpen, Printer, ScanSearch, X } from 'lucide-react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { Crosshair, Download, PanelLeftClose, PanelLeftOpen, ScanSearch, X } from 'lucide-react'
 import MapView from './components/MapView'
 import InsetMap from './components/InsetMap'
 import Sidebar from './components/Sidebar'
 import RadiusControl from './components/RadiusControl'
 import PrintDialog from './components/PrintDialog'
+import { NorthArrow, PrintHeader, PrintLegend, ServingBadge } from './components/PrintOverlays'
+import ExportResult, { ExportProgress } from './components/ExportResult'
+import { captureFrame } from './lib/exportMap'
 import { CATEGORIES, OFFICE, PLACES } from './data/places'
 import { distanceKm } from './lib/geo'
-import { DEFAULT_RADIUS, MAX_RADIUS, MIN_RADIUS, PAPERS, PRINT_MARGIN_MM, paperPx } from './lib/radius'
+import { DEFAULT_RADIUS, MAX_RADIUS, MIN_RADIUS, PAPERS, exportFrame } from './lib/radius'
+import { DETAIL_PLACES } from './lib/detail'
 
 const DIST = Object.fromEntries(PLACES.map((p) => [p.id, distanceKm(OFFICE, p)]))
 
@@ -26,18 +30,63 @@ export default function App() {
     return r >= MIN_RADIUS && r <= MAX_RADIUS ? r : DEFAULT_RADIUS
   })
   const [printDialog, setPrintDialog] = useState(null) // { prevRadius } jab dialog khula ho
-  const [printing, setPrinting] = useState(null) // { paper } jab print chal raha ho
+  // { paper, area, bounds?, withDetail?, step?, preview? } jab download wali map ban rahi ho.
+  // step: 'main' (radius / screen view) phir 'detail' (Yateem Khana close-up page)
+  // ?printpreview=A3 (A4..A0) URL mein ho to sirf layout dikhao, file na banao.
+  // ?exporttest=A3 ho to file bana kar result dikhao (testing ke liye).
+  const [printing, setPrinting] = useState(() => {
+    const q = new URLSearchParams(location.search)
+    const pp = q.get('printpreview')
+    const step = q.get('page') === 'detail' ? 'detail' : 'main'
+    if (PAPERS[pp]) return { paper: pp, area: 'radius', preview: true, step }
+    const et = q.get('exporttest')
+    return PAPERS[et] ? { paper: et, area: 'radius', withDetail: true, step: 'main' } : null
+  })
+  const [exportResult, setExportResult] = useState(null) // { pages: [{canvas, preview, title}], frame, name, paper }
+  const [exportError, setExportError] = useState(null)
+  const mapRef = useRef(null)
+  const rootRef = useRef(null)
+  const pagesRef = useRef([]) // bane hue pages (multi-page PDF ke liye)
 
-  // Paper size browser ko batao (@page)
-  useEffect(() => {
-    if (!printing) return
-    const el = document.createElement('style')
-    el.textContent = `@page { size: ${PAPERS[printing.paper].w}mm ${PAPERS[printing.paper].h}mm; margin: ${PRINT_MARGIN_MM}mm; }`
-    document.head.appendChild(el)
-    return () => el.remove()
-  }, [printing])
+  // Map tayyar hone par (tiles load) high-res tasveer banao.
+  // true return = abhi agla page (close-up) banna baqi hai.
+  const onPrintReady = useCallback(async () => {
+    const job = printing
+    try {
+      const f = exportFrame(job.paper)
+      const canvas = await captureFrame(rootRef.current, f)
+      // Preview ke liye chhoti copy
+      const small = document.createElement('canvas')
+      small.width = Math.min(1600, canvas.width)
+      small.height = Math.round((canvas.height * small.width) / canvas.width)
+      small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height)
+      const page = {
+        canvas,
+        preview: small.toDataURL('image/jpeg', 0.85),
+        title: job.step === 'detail' ? 'Page 2 · Close-up (Yateem Khana)' : 'Page 1 · Area map',
+        slug: job.step === 'detail' ? 'closeup' : job.bounds ? 'view' : `${radiusKm}km`,
+      }
+      pagesRef.current = job.step === 'detail' ? [...pagesRef.current, page] : [page]
 
-  const onPrintDone = useCallback(() => setPrinting(null), [])
+      if (job.withDetail && job.step !== 'detail') {
+        setPrinting({ ...job, step: 'detail' }) // ab close-up page banao
+        return true
+      }
+      setExportResult({
+        pages: pagesRef.current,
+        frame: f,
+        paper: job.paper,
+        name: `Niazi-Express-Area-Map-${pagesRef.current[0].slug}-${job.paper}`,
+      })
+      setPrinting(null)
+      return false
+    } catch (err) {
+      console.error(err)
+      setExportError(String(err?.message || err))
+      setPrinting(null)
+      return false
+    }
+  }, [printing, radiusKm])
 
   const toggleCat = (key) =>
     setActiveCats((prev) => {
@@ -46,12 +95,30 @@ export default function App() {
       return next
     })
 
+  const detailPage = printing?.step === 'detail'
   const places = useMemo(() => {
+    // Close-up page: Yateem Khana ki saari local jagahen (radius filter nahi)
+    if (detailPage) return DETAIL_PLACES.filter((p) => activeCats.has(p.cat))
     const q = query.trim().toLowerCase()
     return PLACES.filter(
       (p) => activeCats.has(p.cat) && DIST[p.id] <= radiusKm && (!q || p.name.toLowerCase().includes(q)),
     )
-  }, [activeCats, query, radiusKm])
+  }, [activeCats, query, radiusKm, detailPage])
+
+  // Print header ki doosri line
+  const printSubtitle = useMemo(() => {
+    if (!printing) return ''
+    if (printing.step === 'detail') return 'Close-up: Bund Road / Yateem Khana Bazar  •  Plazas, travel & emergency services'
+    if (printing.bounds) {
+      const [[s, w], [n, e]] = printing.bounds
+      const km = distanceKm({ lat: (s + n) / 2, lng: w }, { lat: (s + n) / 2, lng: e })
+      return `Bund Road / Yateem Khana, Lahore  •  Close-up view (~${km.toFixed(1)} km across)`
+    }
+    return `Bund Road / Yateem Khana, Lahore  •  ${radiusKm} km radius`
+  }, [printing, radiusKm])
+
+  // Legend mein sirf woh categories jo map par hain
+  const legendCats = useMemo(() => Object.keys(CATEGORIES).filter((c) => places.some((p) => p.cat === c)), [places])
 
   const onPick = useCallback((ll) => {
     setPicked(ll)
@@ -63,11 +130,16 @@ export default function App() {
   }, [])
 
   return (
+    <>
     <div
-      className={`flex flex-col overflow-hidden bg-slate-100 text-slate-900 ${printing ? '' : 'h-dvh'}`}
-      style={printing ? paperPx(printing.paper) : undefined}
+      ref={rootRef}
+      className={`flex flex-col overflow-hidden text-slate-900 ${printing ? 'nx-printing bg-white' : 'h-dvh bg-slate-100'}`}
+      style={printing ? { width: exportFrame(printing.paper).width, height: exportFrame(printing.paper).height } : undefined}
     >
-      {/* Header */}
+      {/* Header (print mein professional navy header) */}
+      {printing ? (
+        <PrintHeader subtitle={printSubtitle} />
+      ) : (
       <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
         <button
           onClick={() => setShowSidebar((v) => !v)}
@@ -97,9 +169,10 @@ export default function App() {
           onClick={() => setPrintDialog({ prevRadius: radiusKm })}
           className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-700 print:hidden"
         >
-          <Printer size={16} /> <span className="hidden sm:inline">Print / PDF</span>
+          <Download size={16} /> <span className="hidden sm:inline">Download / Print</span>
         </button>
       </header>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col-reverse md:flex-row">
         <div
@@ -120,6 +193,7 @@ export default function App() {
 
         <main className="relative min-h-0 flex-1">
           <MapView
+            mapRef={mapRef}
             places={places}
             selected={selected}
             onSelect={setSelected}
@@ -128,13 +202,30 @@ export default function App() {
             picked={picked}
             radiusKm={radiusKm}
             printing={printing}
-            onPrintDone={onPrintDone}
+            onPrintReady={onPrintReady}
           />
 
           {/* Radius buttons: zoom (+/−) ke neeche */}
-          <div className="absolute top-[84px] left-[10px] z-[500] print:hidden">
-            <RadiusControl value={radiusKm} onChange={setRadiusKm} />
-          </div>
+          {!printing && (
+            <div className="absolute top-[84px] left-[10px] z-[500] print:hidden">
+              <RadiusControl value={radiusKm} onChange={setRadiusKm} />
+            </div>
+          )}
+
+          {/* Print / PDF overlays */}
+          {printing && (
+            <>
+              <div className="absolute bottom-[50px] left-[10px] z-[600]">
+                <PrintLegend cats={legendCats} />
+              </div>
+              <div className="absolute top-3 right-4 z-[600]">
+                <NorthArrow />
+              </div>
+              <div className="absolute right-[10px] bottom-[26px] z-[600]">
+                <ServingBadge />
+              </div>
+            </>
+          )}
 
           {/* Close-up box: sirf screen par, print/PDF mein nahi */}
           {printing ? null : showInset ? (
@@ -175,13 +266,33 @@ export default function App() {
             setRadiusKm(printDialog.prevRadius)
             setPrintDialog(null)
           }}
-          onPrint={(opts) => {
+          onPrint={({ paper, area, withDetail }) => {
+            // "Screen wala zoom": abhi jo area screen par hai wahi print par fit hoga
+            let bounds = null
+            if (area === 'view' && mapRef.current) {
+              const b = mapRef.current.getBounds()
+              bounds = [
+                [b.getSouth(), b.getWest()],
+                [b.getNorth(), b.getEast()],
+              ]
+            }
             setPrintDialog(null)
             setSelected(null)
-            setPrinting(opts)
+            setPrinting({ paper, area, bounds, withDetail, step: 'main' })
           }}
         />
       )}
     </div>
+
+    {/* Download: progress, result, error (root ke bahar, taake tasveer mein na aayen) */}
+    {printing && !printing.preview && <ExportProgress paper={printing.paper} step={printing.step} />}
+    {exportResult && <ExportResult result={exportResult} onClose={() => setExportResult(null)} />}
+    {exportError && (
+      <div className="fixed inset-x-0 bottom-6 z-[2000] mx-auto w-fit max-w-lg rounded-xl bg-red-600 px-4 py-3 text-sm text-white shadow-xl">
+        Map nahi ban saki: {exportError}
+        <button onClick={() => setExportError(null)} className="ml-3 underline">Theek hai</button>
+      </div>
+    )}
+    </>
   )
 }

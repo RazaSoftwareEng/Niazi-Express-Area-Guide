@@ -39,7 +39,7 @@ function candidates(h, w) {
  * ke upar na aayein. Return: Map(id -> { x, y, w, line }) — x,y pin center se offset;
  * line = { x, y } agar label door hai to pin se label tak line.
  */
-export function layoutLabels(places, zoom, { selectedId, office, viewport } = {}) {
+export function layoutLabels(places, zoom, { selectedId, office, viewport, labelAll } = {}) {
   const mustShow = (p) =>
     p.id === selectedId || zoom >= FORCE_ALL_FROM_ZOOM || (p.tier === 1 && zoom >= FORCE_TIER1_FROM_ZOOM)
   const pts = new Map(places.map((p) => [p.id, CRS.latLngToPoint(L.latLng(p.lat, p.lng), zoom)]))
@@ -61,7 +61,7 @@ export function layoutLabels(places, zoom, { selectedId, office, viewport } = {}
 
   const result = new Map()
   for (const p of order) {
-    if (p.noLabel) continue // plazas: sirf icon, label nahi
+    if (p.noLabel && !labelAll) continue // plazas: sirf icon, label nahi (detail page par label bhi)
     const { x, y } = pts.get(p.id)
     const h = pinSize(p) / 2
     const w = labelWidth(p.name)

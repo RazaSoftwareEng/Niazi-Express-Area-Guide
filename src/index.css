@@ -93,3 +93,17 @@
   html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .leaflet-control-zoom { display: none; }
 }
+
+/* Print scale bar (km) — navy box */
+.leaflet-control-scale { margin-left: 10px !important; margin-bottom: 10px !important; }
+.leaflet-control-scale-line {
+  border: 2px solid #0b1f4f;
+  border-top: none;
+  background: rgb(255 255 255 / 0.95);
+  color: #0b1f4f;
+  font: 700 12px/1.6 system-ui, sans-serif;
+  padding: 0 6px;
+}
+
+/* Print layout mein zoom buttons nahi */
+.nx-printing .leaflet-control-zoom { display: none; }

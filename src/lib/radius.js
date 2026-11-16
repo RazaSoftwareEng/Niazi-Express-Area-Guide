@@ -29,17 +29,31 @@ export function circlePoints(km, n = 96) {
   })
 }
 
-/** Paper sizes (landscape, 8mm margin) → CSS px @ 96dpi */
+/**
+ * Download sizes (landscape). Bara paper = zyada zoom/detail, aur `scale` se
+ * labels/header bhi physically bare hote hain taake chart door se parha ja sake.
+ */
 const MM = 96 / 25.4
 export const PAPERS = {
-  A3: { label: 'A3 (bara)', w: 420, h: 297 },
-  A4: { label: 'A4', w: 297, h: 210 },
+  A4: { label: 'A4', sub: '29.7 × 21 cm', w: 297, h: 210, dpi: 200 },
+  A3: { label: 'A3', sub: '42 × 29.7 cm', w: 420, h: 297, dpi: 200 },
+  A2: { label: 'A2', sub: '59.4 × 42 cm', w: 594, h: 420, dpi: 150 },
+  A1: { label: 'A1 · Chart', sub: '84 × 59.4 cm', w: 841, h: 594, dpi: 150 },
+  A0: { label: 'A0 · Large', sub: '119 × 84 cm', w: 1189, h: 841, dpi: 130 },
 }
-export const PRINT_MARGIN_MM = 8
-export const paperPx = (key) => {
+
+/**
+ * Export frame: CSS size (layout) + pixelRatio (capture resolution).
+ * scale = (paper width / A4 width)^0.3: A4 1×, A1 ~1.37×, A0 ~1.5×.
+ * Bara paper par map ko zyada jagah milti hai (zyada zoom) aur labels bhi thore bare.
+ */
+export function exportFrame(key) {
   const p = PAPERS[key]
+  const scale = Math.pow(p.w / 297, 0.3)
   return {
-    width: Math.floor((p.w - 2 * PRINT_MARGIN_MM) * MM),
-    height: Math.floor((p.h - 2 * PRINT_MARGIN_MM) * MM) - 4, // -4px: doosra khali page na bane
+    width: Math.round((p.w * MM) / scale),
+    height: Math.round((p.h * MM) / scale),
+    pixelRatio: (p.dpi / 96) * scale,
+    mm: [p.w, p.h],
   }
 }
