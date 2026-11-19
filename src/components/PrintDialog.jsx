@@ -11,8 +11,8 @@ const recommendFor = (km) => (km <= 2 ? 'A4' : km <= 4 ? 'A3' : km <= 6 ? 'A2' :
  */
 export default function PrintDialog({ radius, onRadius, countInside, onCancel, onPrint }) {
   const [paper, setPaper] = useState('A3')
-  const [area, setArea] = useState('radius') // 'radius' = KM ke hisaab se, 'view' = screen wala zoom
-  const [withDetail, setWithDetail] = useState(true) // Page 2: Yateem Khana close-up
+  // 'zoom' = Yateem Khana zoomed (default), 'radius' = KM ke hisaab se, 'view' = screen wala zoom
+  const [area, setArea] = useState('zoom')
   const rec = area === 'radius' ? recommendFor(radius) : null
 
   return (
@@ -27,8 +27,9 @@ export default function PrintDialog({ radius, onRadius, countInside, onCancel, o
           </button>
         </div>
 
-        <div className="mb-4 grid grid-cols-2 gap-2">
+        <div className="mb-4 grid grid-cols-3 gap-2">
           {[
+            ['zoom', 'Zoomed area', 'Bazar + plazas asli jagah par'],
             ['radius', 'KM radius', 'Office ke gird chuna hua area'],
             ['view', 'Screen wala zoom', 'Jo abhi screen par hai'],
           ].map(([key, title, sub]) => (
@@ -68,6 +69,11 @@ export default function PrintDialog({ radius, onRadius, countInside, onCancel, o
             </div>
             <p className="mt-1 text-xs text-slate-500">File mein radius ka circle nahi aayega, sirf itna area aayega.</p>
           </>
+        ) : area === 'zoom' ? (
+          <p className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-900">
+            Poora page Yateem Khana Bazar / Bund Road par zoom hoga — har plaza, travel company, police, fire brigade
+            apni asli jagah aur naam ke saath. Kinaron wala door ka area kat jayega.
+          </p>
         ) : (
           <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600">
             Screen par jitna area / zoom hai wahi file mein aayega. Pehle map ko zoom karke set kar lein.
@@ -96,27 +102,13 @@ export default function PrintDialog({ radius, onRadius, countInside, onCancel, o
           ))}
         </div>
 
-        <label className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm">
-          <input
-            type="checkbox"
-            checked={withDetail}
-            onChange={(e) => setWithDetail(e.target.checked)}
-            className="mt-0.5 size-4 accent-emerald-700"
-          />
-          <span>
-            <b>Close-up page bhi banayein</b> (Page 2)
-            <span className="block text-xs text-slate-600">
-              Yateem Khana / Bund Road zoom karke — har plaza, travel company, police, fire brigade alag alag naam ke saath
-            </span>
-          </span>
-        </label>
 
         <div className="mt-5 flex gap-2">
           <button onClick={onCancel} className="flex-1 rounded-lg border border-slate-200 py-2 text-sm hover:bg-slate-50">
             Cancel
           </button>
           <button
-            onClick={() => onPrint({ paper, area, withDetail })}
+            onClick={() => onPrint({ paper, area })}
             className="flex flex-[2] items-center justify-center gap-2 rounded-lg bg-slate-900 py-2 text-sm font-semibold text-white hover:bg-slate-700"
           >
             <Download size={16} /> Map banayein

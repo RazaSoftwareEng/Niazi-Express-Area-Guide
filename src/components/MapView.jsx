@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, ScaleControl, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
+import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, Rectangle, ScaleControl, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { CATEGORIES, OFFICE } from '../data/places'
 import { ORANGE_LINE_TRACK } from '../data/orangeLineTrack'
@@ -7,7 +7,7 @@ import { distanceKm, fmtKm } from '../lib/geo'
 import { officeIcon, placeIcon } from '../lib/icons'
 import { layoutLabels } from '../lib/labels'
 import { circlePoints, radiusBounds, ringsFor, ringTop } from '../lib/radius'
-import { detailBounds } from '../lib/detail'
+import { detailBounds, ZOOM_BOUNDS } from '../lib/detail'
 
 // Free OpenStreetMap tiles (demo ke liye). Production / zyada traffic ke liye
 // MapTiler ya Stadia ki free API key wale tiles lagayein.
@@ -55,11 +55,11 @@ function PrintRunner({ printing, radiusKm, onReady }) {
             ? L.latLngBounds(printing.bounds)
             : radiusBounds(radiusKm)
       map.fitBounds(target, { animate: false, padding: [6, 6] })
-      let tiles
-      map.eachLayer((l) => l instanceof L.TileLayer && (tiles = l))
+      // Page ke SAARE maps (main + zoom box) ke tiles load hone ka intezar (max ~12s)
+      await wait(500)
+      const pending = () => [...document.querySelectorAll('img.leaflet-tile')].some((img) => !img.complete)
+      for (let t = 0; t < 60 && pending(); t++) await wait(200)
       await wait(400)
-      for (let t = 0; t < 40 && tiles?.isLoading?.(); t++) await wait(200) // max ~8s
-      await wait(300)
       if (cancelled || printing.preview) return
       if (document.fonts?.ready) await document.fonts.ready
       const more = await onReady() // App yahan high-res tasveer banati hai
@@ -154,7 +154,8 @@ export default function MapView({ mapRef, places, selected, onSelect, pickMode, 
   }, [radiusKm])
 
   // Plazas (tier 3) zoom 14 se kam par nahi — door se sirf dhabba bante hain aur labels dhak dete hain
-  const detailPage = printing?.step === 'detail'
+  // Zoomed download / detail page: plazas ke naam bhi likho
+  const detailPage = printing?.step === 'detail' || printing?.area === 'zoom'
   const visible = useMemo(
     () => places.filter((p) => p.tier !== 3 || zoom >= 14 || detailPage),
     [places, zoom, detailPage],
@@ -185,6 +186,13 @@ export default function MapView({ mapRef, places, selected, onSelect, pickMode, 
 
       {/* Print / PDF mein: scale bar (km); radius circle, grey area aur rings nahi */}
       {printing && <ScaleControl position="bottomleft" imperial={false} maxWidth={220} />}
+      {/* Zoom box kis hisse ka hai — dashed chokor */}
+      {printing?.zoomBox && (
+        <Rectangle
+          bounds={ZOOM_BOUNDS}
+          pathOptions={{ color: '#0b1f4f', weight: 2.5, dashArray: '7 5', fill: true, fillOpacity: 0.06, interactive: false }}
+        />
+      )}
 
       {!printing && (
         <>

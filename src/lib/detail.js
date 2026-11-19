@@ -10,3 +10,14 @@ export const DETAIL_PLACES = PLACES.filter(
 )
 export const detailBounds = () =>
   L.latLngBounds([...DETAIL_PLACES, OFFICE].map((p) => [p.lat, p.lng])).pad(0.08)
+
+/**
+ * Single-page PDF ka "ZOOM" box: plazas + office wala hissa (asli jagah dikhane ke liye).
+ * Is area ki saari jagahen (stations samait) box mein label ke saath aati hain.
+ */
+const PLAZAS = PLACES.filter((p) => p.cat === 'plaza')
+export const ZOOM_BOUNDS = L.latLngBounds([...PLAZAS, OFFICE].map((p) => [p.lat, p.lng])).pad(0.18)
+export const ZOOM_PLACES = PLACES.filter((p) => ZOOM_BOUNDS.contains([p.lat, p.lng]))
+
+/** "Zoomed area" download: poora page isi area par zoom (sides kat jati hain) */
+export const focusBounds = () => L.latLngBounds([...DETAIL_PLACES, OFFICE].map((p) => [p.lat, p.lng])).pad(0.2)

@@ -40,30 +40,49 @@ function LegendDot({ color, icon }) {
   )
 }
 
-/** Neeche left: legend (sirf woh categories jo map par hain) */
-export function PrintLegend({ cats }) {
+/**
+ * Top-left "Map Key" chart: har nishan (icon) ka matlab + us category ki jagahon ke naam,
+ * taake dekhne wala samajh sake kaun sa nishan kya hai.
+ */
+export function PrintLegend({ cats, places }) {
+  const namesFor = (key) => {
+    const list = places.filter((p) => p.cat === key)
+    if (key === 'plaza') return `${list.length} plazas — Bund Road / Multan Road par, number ke saath`
+    return list.map((p) => p.name.replace(/ Station$/, '')).join(' · ')
+  }
   return (
-    <div className="w-[210px] overflow-hidden rounded-xl border-2 bg-white/95 shadow-lg" style={{ borderColor: NAVY }}>
-      <div className="px-3 py-1.5 text-[15px] font-bold text-white" style={{ background: NAVY }}>
-        Legend
+    <div className="w-[400px] overflow-hidden rounded-xl border-[3px] bg-white/[0.97] shadow-xl" style={{ borderColor: NAVY }}>
+      <div className="flex items-baseline justify-between px-3.5 py-2 text-white" style={{ background: NAVY }}>
+        <span className="text-[17px] font-bold">Map Key</span>
+        <span className="text-[11px] text-white/75">nishan · naam · jagahen</span>
       </div>
-      <ul className="space-y-[5px] px-3 py-2 text-[12.5px] font-medium text-slate-800">
-        <li className="flex items-center gap-2.5">
-          <svg viewBox="0 0 24 34" width="14" height="20" className="mx-[2px]">
+      <ul className="divide-y divide-slate-100 px-3.5 py-1.5">
+        <li className="flex items-start gap-2.5 py-1.5">
+          <svg viewBox="0 0 24 34" width="18" height="25" className="mt-0.5 shrink-0">
             <path d="M12 0C5.4 0 0 5.3 0 11.9 0 20.8 12 34 12 34s12-13.2 12-22.1C24 5.3 18.6 0 12 0z" fill="#ea4335" />
             <circle cx="12" cy="12" r="4.5" fill="#a52714" />
           </svg>
-          Your Location
+          <div>
+            <div className="text-[13.5px] font-bold text-slate-900">I'm Here! — Niazi Express</div>
+            <div className="text-[11px] leading-snug text-slate-500">Hamari location (Bund Road / Yateem Khana)</div>
+          </div>
         </li>
         {cats.map((key) => (
-          <li key={key} className="flex items-center gap-2.5">
-            <LegendDot color={CATEGORIES[key].color} icon={CATEGORIES[key].icon} />
-            {key === 'metro' ? 'Train Station' : CATEGORIES[key].label}
+          <li key={key} className="flex items-start gap-2.5 py-1.5">
+            <span className="mt-0.5 grid size-[22px] shrink-0 place-items-center rounded-full" style={{ background: CATEGORIES[key].color }}>
+              {createElement(ICONS[CATEGORIES[key].icon] || MapPin, { size: 12, color: '#fff', strokeWidth: 2.75 })}
+            </span>
+            <div className="min-w-0">
+              <div className="text-[13.5px] font-bold" style={{ color: CATEGORIES[key].color }}>
+                {key === 'metro' ? 'Orange Line Stations' : CATEGORIES[key].label}
+              </div>
+              <div className="text-[11px] leading-snug text-slate-600">{namesFor(key)}</div>
+            </div>
           </li>
         ))}
-        <li className="flex items-center gap-2.5">
-          <span className="h-[5px] w-[18px] shrink-0 rounded bg-[#f58220]" />
-          Orange Line (Metro)
+        <li className="flex items-center gap-2.5 py-1.5">
+          <span className="h-[6px] w-[22px] shrink-0 rounded bg-[#f58220]" />
+          <span className="text-[13px] font-semibold text-slate-800">Orange Line (Metro track)</span>
         </li>
       </ul>
     </div>

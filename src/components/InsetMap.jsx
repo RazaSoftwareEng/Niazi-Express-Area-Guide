@@ -8,7 +8,7 @@ import { officeIcon, placeIcon } from '../lib/icons'
 import { layoutLabels } from '../lib/labels'
 import { TILE_ATTR, TILE_URL } from './MapView'
 
-const CORE = PLACES.filter((p) => (p.tier >= 2 && p.cat !== 'metro') || ['niazi-adda', 'yateem-chowk'].includes(p.id))
+const CORE = PLACES.filter((p) => (p.tier >= 2 && p.cat !== 'metro' && !(p.cat === 'plaza' && (p.lat > 31.5365 || p.lat < 31.5318))) || ['niazi-adda', 'yateem-chowk'].includes(p.id))
 const bounds = L.latLngBounds([...CORE, OFFICE].map((p) => [p.lat, p.lng])).pad(0.15)
 // Jo Orange Line stations is box ke andar aate hain, woh bhi dikhao
 const LOCAL = [...CORE, ...PLACES.filter((p) => p.cat === 'metro' && bounds.contains([p.lat, p.lng]))]

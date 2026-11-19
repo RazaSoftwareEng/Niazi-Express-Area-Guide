@@ -7,11 +7,12 @@ import RadiusControl from './components/RadiusControl'
 import PrintDialog from './components/PrintDialog'
 import { NorthArrow, PrintHeader, PrintLegend, ServingBadge } from './components/PrintOverlays'
 import ExportResult, { ExportProgress } from './components/ExportResult'
+import PrintZoomBox from './components/PrintZoomBox'
 import { captureFrame } from './lib/exportMap'
 import { CATEGORIES, OFFICE, PLACES } from './data/places'
 import { distanceKm } from './lib/geo'
 import { DEFAULT_RADIUS, MAX_RADIUS, MIN_RADIUS, PAPERS, exportFrame } from './lib/radius'
-import { DETAIL_PLACES } from './lib/detail'
+import { DETAIL_PLACES, focusBounds } from './lib/detail'
 
 const DIST = Object.fromEntries(PLACES.map((p) => [p.id, distanceKm(OFFICE, p)]))
 
@@ -30,7 +31,7 @@ export default function App() {
     return r >= MIN_RADIUS && r <= MAX_RADIUS ? r : DEFAULT_RADIUS
   })
   const [printDialog, setPrintDialog] = useState(null) // { prevRadius } jab dialog khula ho
-  // { paper, area, bounds?, withDetail?, step?, preview? } jab download wali map ban rahi ho.
+  // { paper, area, bounds?, zoomBox?, step?, preview? } jab download wali map ban rahi ho.
   // step: 'main' (radius / screen view) phir 'detail' (Yateem Khana close-up page)
   // ?printpreview=A3 (A4..A0) URL mein ho to sirf layout dikhao, file na banao.
   // ?exporttest=A3 ho to file bana kar result dikhao (testing ke liye).
@@ -38,9 +39,13 @@ export default function App() {
     const q = new URLSearchParams(location.search)
     const pp = q.get('printpreview')
     const step = q.get('page') === 'detail' ? 'detail' : 'main'
-    if (PAPERS[pp]) return { paper: pp, area: 'radius', preview: true, step }
+    const zb = () => { const b = focusBounds(); return [[b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]] }
+    if (PAPERS[pp]) return { paper: pp, area: 'zoom', bounds: zb(), preview: true, step }
     const et = q.get('exporttest')
-    return PAPERS[et] ? { paper: et, area: 'radius', withDetail: true, step: 'main' } : null
+    if (!PAPERS[et]) return null
+    // ?mode=radiusbox → purana version: KM radius map + neeche ZOOM card (same page)
+    if (q.get('mode') === 'radiusbox') return { paper: et, area: 'radius', zoomBox: true, step: 'main' }
+    return { paper: et, area: 'zoom', bounds: zb(), step: 'main' }
   })
   const [exportResult, setExportResult] = useState(null) // { pages: [{canvas, preview, title}], frame, name, paper }
   const [exportError, setExportError] = useState(null)
@@ -64,7 +69,7 @@ export default function App() {
         canvas,
         preview: small.toDataURL('image/jpeg', 0.85),
         title: job.step === 'detail' ? 'Page 2 · Close-up (Yateem Khana)' : 'Page 1 · Area map',
-        slug: job.step === 'detail' ? 'closeup' : job.bounds ? 'view' : `${radiusKm}km`,
+        slug: job.step === 'detail' ? 'closeup' : job.area === 'zoom' ? 'zoomed' : job.bounds ? 'view' : `${radiusKm}km`,
       }
       pagesRef.current = job.step === 'detail' ? [...pagesRef.current, page] : [page]
 
@@ -99,16 +104,19 @@ export default function App() {
   const places = useMemo(() => {
     // Close-up page: Yateem Khana ki saari local jagahen (radius filter nahi)
     if (detailPage) return DETAIL_PLACES.filter((p) => activeCats.has(p.cat))
+    // Zoomed download: radius filter nahi (frame ke andar jo bhi hai dikhe)
+    if (printing?.area === 'zoom') return PLACES.filter((p) => activeCats.has(p.cat))
     const q = query.trim().toLowerCase()
     return PLACES.filter(
       (p) => activeCats.has(p.cat) && DIST[p.id] <= radiusKm && (!q || p.name.toLowerCase().includes(q)),
     )
-  }, [activeCats, query, radiusKm, detailPage])
+  }, [activeCats, query, radiusKm, detailPage, printing?.area])
 
   // Print header ki doosri line
   const printSubtitle = useMemo(() => {
     if (!printing) return ''
     if (printing.step === 'detail') return 'Close-up: Bund Road / Yateem Khana Bazar  •  Plazas, travel & emergency services'
+    if (printing.area === 'zoom') return 'Zoomed: Yateem Khana Bazar / Bund Road, Lahore  •  Plazas, travel & services — asli location'
     if (printing.bounds) {
       const [[s, w], [n, e]] = printing.bounds
       const km = distanceKm({ lat: (s + n) / 2, lng: w }, { lat: (s + n) / 2, lng: e })
@@ -118,7 +126,16 @@ export default function App() {
   }, [printing, radiusKm])
 
   // Legend mein sirf woh categories jo map par hain
-  const legendCats = useMemo(() => Object.keys(CATEGORIES).filter((c) => places.some((p) => p.cat === c)), [places])
+  // (Zoomed download: sirf woh jagahen jo page ke area mein hain)
+  const legendPlaces = useMemo(() => {
+    if (printing?.area !== 'zoom') return places
+    const [[s, w], [n, e]] = printing.bounds
+    return places.filter((p) => p.lat >= s && p.lat <= n && p.lng >= w && p.lng <= e)
+  }, [places, printing])
+  const legendCats = useMemo(
+    () => Object.keys(CATEGORIES).filter((c) => legendPlaces.some((p) => p.cat === c)),
+    [legendPlaces],
+  )
 
   const onPick = useCallback((ll) => {
     setPicked(ll)
@@ -215,9 +232,16 @@ export default function App() {
           {/* Print / PDF overlays */}
           {printing && (
             <>
-              <div className="absolute bottom-[50px] left-[10px] z-[600]">
-                <PrintLegend cats={legendCats} />
+              {/* Top-left: Map Key chart (nishan + naam) */}
+              <div className="absolute top-3 left-3 z-[600]">
+                <PrintLegend cats={legendCats} places={legendPlaces} />
               </div>
+              {/* Neeche left: ZOOM box (plazas ki asli location) — same page */}
+              {printing.zoomBox && printing.step !== 'detail' && (
+                <div className="absolute bottom-[46px] left-3 z-[600] h-[33%] w-[41%]">
+                  <PrintZoomBox />
+                </div>
+              )}
               <div className="absolute top-3 right-4 z-[600]">
                 <NorthArrow />
               </div>
@@ -266,10 +290,16 @@ export default function App() {
             setRadiusKm(printDialog.prevRadius)
             setPrintDialog(null)
           }}
-          onPrint={({ paper, area, withDetail }) => {
+          onPrint={({ paper, area }) => {
             // "Screen wala zoom": abhi jo area screen par hai wahi print par fit hoga
             let bounds = null
-            if (area === 'view' && mapRef.current) {
+            if (area === 'zoom') {
+              const b = focusBounds()
+              bounds = [
+                [b.getSouth(), b.getWest()],
+                [b.getNorth(), b.getEast()],
+              ]
+            } else if (area === 'view' && mapRef.current) {
               const b = mapRef.current.getBounds()
               bounds = [
                 [b.getSouth(), b.getWest()],
@@ -278,7 +308,7 @@ export default function App() {
             }
             setPrintDialog(null)
             setSelected(null)
-            setPrinting({ paper, area, bounds, withDetail, step: 'main' })
+            setPrinting({ paper, area, bounds, step: 'main' })
           }}
         />
       )}
