@@ -16,6 +16,16 @@ import { DETAIL_PLACES, focusBounds } from './lib/detail'
 
 const DIST = Object.fromEntries(PLACES.map((p) => [p.id, distanceKm(OFFICE, p)]))
 
+/** Chhota blinking dot: "yahan click karke kholein" ka ishara */
+function BlinkDot() {
+  return (
+    <span className="pointer-events-none absolute -top-1 -right-1 flex size-3">
+      <span className="absolute inline-flex size-full animate-ping rounded-full bg-red-500 opacity-75" />
+      <span className="relative inline-flex size-3 rounded-full border-2 border-white bg-red-500" />
+    </span>
+  )
+}
+
 export default function App() {
   const [activeCats, setActiveCats] = useState(() => new Set(Object.keys(CATEGORIES)))
   const [query, setQuery] = useState('')
@@ -23,8 +33,9 @@ export default function App() {
   const [pickMode, setPickMode] = useState(false)
   const [picked, setPicked] = useState(null)
   const [copied, setCopied] = useState(false)
-  const [showSidebar, setShowSidebar] = useState(true)
-  const [showInset, setShowInset] = useState(true)
+  // Default band: map poori screen par. Buttons par blinking dot batata hai ke kholna ho to yahan click karein.
+  const [showSidebar, setShowSidebar] = useState(false)
+  const [showInset, setShowInset] = useState(false)
   // ?r=3 URL mein ho to wahi radius, warna default
   const [radiusKm, setRadiusKm] = useState(() => {
     const r = Number(new URLSearchParams(location.search).get('r'))
@@ -160,10 +171,11 @@ export default function App() {
       <header className="flex items-center gap-3 border-b border-slate-200 bg-white px-4 py-2.5">
         <button
           onClick={() => setShowSidebar((v) => !v)}
-          className="grid size-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 print:hidden"
-          title={showSidebar ? 'Sidebar chhupayein' : 'Sidebar dikhayein'}
+          className="relative grid size-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 print:hidden"
+          title={showSidebar ? 'Sidebar chhupayein' : 'Sidebar dikhayein (categories, search, list)'}
         >
           {showSidebar ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+          {!showSidebar && <BlinkDot />}
         </button>
         <div className="grid size-9 place-items-center rounded-lg bg-[#1e1b8f] text-sm font-black text-white">NE</div>
         <div className="min-w-0 flex-1">
@@ -265,6 +277,7 @@ export default function App() {
               className="absolute right-3 bottom-6 z-[500] hidden items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white shadow-lg hover:bg-slate-700 lg:flex print:hidden"
             >
               <ScanSearch size={16} /> Close-up dikhayein
+              <BlinkDot />
             </button>
           )}
 
