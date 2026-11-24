@@ -47,9 +47,10 @@ export const PAPERS = {
  * scale = (paper width / A4 width)^0.3: A4 1×, A1 ~1.37×, A0 ~1.5×.
  * Bara paper par map ko zyada jagah milti hai (zyada zoom) aur labels bhi thore bare.
  */
-export function exportFrame(key) {
+export function exportFrame(key, big = false) {
   const p = PAPERS[key]
-  const scale = Math.pow(p.w / 297, 0.3)
+  // big: labels/icons aur bare (door se parhne ke liye)
+  const scale = Math.pow(p.w / 297, big ? 0.62 : 0.3)
   return {
     width: Math.round((p.w * MM) / scale),
     height: Math.round((p.h * MM) / scale),

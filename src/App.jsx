@@ -56,6 +56,12 @@ export default function App() {
     if (!PAPERS[et]) return null
     // ?mode=radiusbox → purana version: KM radius map + neeche ZOOM card (same page)
     if (q.get('mode') === 'radiusbox') return { paper: et, area: 'radius', zoomBox: true, step: 'main' }
+    if (q.get('mode') === 'radius') return { paper: et, area: 'radius', step: 'main' }
+    // ?mode=bounds&b=south,west,north,east → bilkul isi area par zoom
+    if (q.get('mode') === 'bounds') {
+      const [bs, bw, bn, be] = (q.get('b') || '').split(',').map(Number)
+      return { paper: et, area: 'view', bounds: [[bs, bw], [bn, be]], big: q.get('big') === '1', step: 'main' }
+    }
     return { paper: et, area: 'zoom', bounds: zb(), step: 'main' }
   })
   const [exportResult, setExportResult] = useState(null) // { pages: [{canvas, preview, title}], frame, name, paper }
@@ -69,7 +75,7 @@ export default function App() {
   const onPrintReady = useCallback(async () => {
     const job = printing
     try {
-      const f = exportFrame(job.paper)
+      const f = exportFrame(job.paper, job.big)
       const canvas = await captureFrame(rootRef.current, f)
       // Preview ke liye chhoti copy
       const small = document.createElement('canvas')
@@ -131,7 +137,7 @@ export default function App() {
     if (printing.bounds) {
       const [[s, w], [n, e]] = printing.bounds
       const km = distanceKm({ lat: (s + n) / 2, lng: w }, { lat: (s + n) / 2, lng: e })
-      return `Bund Road / Yateem Khana, Lahore  •  Close-up view (~${km.toFixed(1)} km across)`
+      return `Bund Road / Yateem Khana, Lahore  •  Markets, commercial areas & landmarks (~${km.toFixed(0)} km across)`
     }
     return `Bund Road / Yateem Khana, Lahore  •  ${radiusKm} km radius`
   }, [printing, radiusKm])
@@ -162,7 +168,7 @@ export default function App() {
     <div
       ref={rootRef}
       className={`flex flex-col overflow-hidden text-slate-900 ${printing ? 'nx-printing bg-white' : 'h-dvh bg-slate-100'}`}
-      style={printing ? { width: exportFrame(printing.paper).width, height: exportFrame(printing.paper).height } : undefined}
+      style={printing ? { width: exportFrame(printing.paper, printing.big).width, height: exportFrame(printing.paper, printing.big).height } : undefined}
     >
       {/* Header (print mein professional navy header) */}
       {printing ? (

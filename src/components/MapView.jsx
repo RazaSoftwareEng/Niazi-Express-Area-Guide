@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Circle, MapContainer, Marker, Polygon, Polyline, Popup, Rectangle, ScaleControl, TileLayer, Tooltip, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import { CATEGORIES, OFFICE } from '../data/places'
 import { ORANGE_LINE_TRACK } from '../data/orangeLineTrack'
+import { HIGHLIGHT_ROADS } from '../data/highlightRoads'
 import { distanceKm, fmtKm } from '../lib/geo'
 import { officeIcon, placeIcon } from '../lib/icons'
 import { layoutLabels } from '../lib/labels'
@@ -157,8 +158,8 @@ export default function MapView({ mapRef, places, selected, onSelect, pickMode, 
   // Zoomed download / detail page: plazas ke naam bhi likho
   const detailPage = printing?.step === 'detail' || printing?.area === 'zoom'
   const visible = useMemo(
-    () => places.filter((p) => p.tier !== 3 || zoom >= 14 || detailPage),
-    [places, zoom, detailPage],
+    () => places.filter((p) => p.tier !== 3 || zoom >= 14 || detailPage || !!printing),
+    [places, zoom, detailPage, printing],
   )
 
   const shown = useMemo(
@@ -223,6 +224,23 @@ export default function MapView({ mapRef, places, selected, onSelect, pickMode, 
           ))}
         </>
       )}
+
+      {/* Highlight sarakein: M-2 Motorway, Wahdat Road (Commercial), ... */}
+      {HIGHLIGHT_ROADS.map((r) => (
+        <Fragment key={r.id}>
+          <Polyline positions={r.segments} pathOptions={{ color: '#ffffff', weight: r.weight + 4, opacity: 0.85, interactive: false }} />
+          <Polyline positions={r.segments} pathOptions={{ color: r.color, weight: r.weight, opacity: 0.85, interactive: false }} />
+          <Marker
+            position={r.label}
+            interactive={false}
+            icon={L.divIcon({
+              html: `<div class="nx-road-label" style="background:${r.color}">${r.name}</div>`,
+              className: 'nx-icon',
+              iconSize: [0, 0],
+            })}
+          />
+        </Fragment>
+      ))}
 
       {/* Orange Line */}
       <Polyline positions={orangePath} pathOptions={{ color: '#ffffff', weight: 9, opacity: 0.9 }} />

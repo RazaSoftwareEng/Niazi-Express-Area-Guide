@@ -107,3 +107,16 @@
 
 /* Print layout mein zoom buttons nahi */
 .nx-printing .leaflet-control-zoom { display: none; }
+
+/* Highlight sarak ka naam (M-2, Wahdat Road ...) */
+.nx-road-label {
+  transform: translate(-50%, -50%);
+  width: max-content;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  border: 2px solid #fff;
+  color: #fff;
+  font: 800 12px/1.2 system-ui, sans-serif;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.35);
+  letter-spacing: 0.02em;
+}
